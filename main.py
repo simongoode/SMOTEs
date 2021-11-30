@@ -280,6 +280,7 @@ for i,r in data.iterrows():
 	nearby = SMOTE_Selection(det_num, 3, max_det)
 	t_file = open(wd+'{}/template_files.ascii'.format(r['Filename']), 'w+')
 	n_file = open(wd+'{}/nearby_files.ascii'.format(r['Filename']), 'w+')
+	s_file = open(wd+'{}/SMOTE_file.ascii'.format(r['Filename']), 'w+')
 	if verbose:
 		print(r['Filename'])
 	for n,im in enumerate(ordered_ims):
@@ -304,6 +305,9 @@ for i,r in data.iterrows():
 							t_file.write(im_path+fitsim+'\n')
 						if n in nearby:
 							n_file.write(im_path+fitsim+'\n')
+						if n == det_num:
+							s_file.write(im_path+fitsim+'\n')
+							smote = im_path+fitsim
 						found = True
 						break
 		    
@@ -326,8 +330,15 @@ for i,r in data.iterrows():
 							t_file.write(im_path+fitsim+'\n')
 						if n in nearby:
 							n_file.write(im_path+fitsim+'\n')
+						if n == det_num:
+							s_file.write(im_path+fitsim+'\n')
+							smote = im_path+fitsim
 						break
 
 	t_file.close()
 	n_file.close()
+	s_file.close()
+	
+	os.system('swarp @{}/template_files.ascii -VERBOSE_TYPE QUIET -IMAGEOUT_NAME {}/full/template.fits -WEIGHTOUT_NAME {}/full/temp_weights.fits -XML_NAME {}/full/swarp.xml'.format(wd+r['Filename'], wd+r['Filename'], wd+r['Filename'], wd+r['Filename']))
+	os.system('python /fred/oz100/sgoode/dataexplore/datavis/fits/align_image.py --swarp /apps/skylake/software/compiler/gcc/6.4.0/swarp/2.38.0/bin/swarp {}/full/template.fits {} -o {}/full/aligned/ -q'.format(wd+r['Filename'], smote, wd+r['Filename']))
 	break  # Break for testing
