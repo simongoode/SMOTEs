@@ -44,6 +44,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import math
 
 
 
@@ -85,7 +86,7 @@ def Extract_Info(f):
 			
 	return index, mjd, mag, magerr, np.mean(nondet), np.std(nondet)/np.sqrt(len(nondet))
 
-def Initialise_Dirs(datapath, c_name):
+def Initialise_Dirs(datapath, wd, c_name):
 	if datapath[-1] != '/':
 		datapath = datapath+'/'
 		
@@ -93,19 +94,95 @@ def Initialise_Dirs(datapath, c_name):
 		print('{} does not exist. Please create before continuing!'.format(datapath))
 		return
 		
-	if not os.path.exists(datapath+c_name):
-		os.makedirs(datapath+c_name)
-		os.makedirs(datapath+c_name+'/full/')
-		os.makedirs(datapath+c_name+'/cutouts/')
-		os.makedirs(datapath+c_name+'/full/aligned/')
+	if not os.path.exists(wd+c_name):
+		os.makedirs(wd+c_name)
+		os.makedirs(wd+c_name+'/full/')
+		os.makedirs(wd+c_name+'/cutouts/')
+		os.makedirs(wd+c_name+'/full/aligned/')
 		
-	elif not os.path.exists(datapath+c_name+'/full/'):
-		os.makedirs(datapath+c_name+'/full/')
-	elif not os.path.exists(datapath+c_name+'/cutouts/'):
-		os.makedirs(datapath+c_name+'/cutouts/')
-	elif not os.path.exists(datapath+c_name+'/full/aligned/'):
-		os.makedirs(datapath+c_name+'/full/aligned/')
+	elif not os.path.exists(wd+c_name+'/full/'):
+		os.makedirs(wd+c_name+'/full/')
+	elif not os.path.exists(wd+c_name+'/cutouts/'):
+		os.makedirs(wd+c_name+'/cutouts/')
+	elif not os.path.exists(wd+c_name+'/full/aligned/'):
+		os.makedirs(wd+c_name+'/full/aligned/')
 	return
+
+def RAdec_to_RAsex(fRAdec):
+	fratotsec = (math.fabs(float(fRAdec))*3600.0)
+	frah2 = (math.modf(fratotsec/3600.0)[1])
+	fram2 = (math.modf((fratotsec-(frah2*3600.0))/60.0)[1])
+	fras2 = (fratotsec-(frah2*3600.0)-(fram2*60.0))
+	if round(fras2, 2) == 60.00:
+		fram2 = fram2 + 1
+		fras2 = 0
+	if round(fram2, 2) == 60.00:
+		frah2 = frah2 + 1
+		fram2 = 0
+	if round(fram2, 2) == 60.00:
+		frah2 = frah2 + 1
+		fram2 = 0
+	if int(frah2) == 24 and (int(fram2) != 0 or int(fras2) != 0):
+		frah2 = frah2 - 24
+	return '%02i' % frah2 + ' ' + '%02i' % fram2 + ' ' + ('%.3f' % float(fras2)).zfill(6)
+
+
+def DEdec_to_DEsex(fDEdec):
+	fdetotsec = (math.fabs(float(fDEdec))*3600.0)
+	fded2 = (math.modf(fdetotsec/3600.0)[1])
+	fdem2 = (math.modf((fdetotsec-(fded2*3600.0))/60.0)[1])
+	fdes2 = (fdetotsec-(fded2*3600.0)-(fdem2*60.0))
+	if float(fDEdec) < 0:
+		fded2sign = '-'
+	else:
+		fded2sign = '+'
+	return fded2sign + '%02i' % fded2 + ' ' + '%02i' % fdem2 + ' ' + ('%.2f' % float(fdes2)).zfill(5)
+
+
+def RAsex_to_RAdec(fRAsex):
+	frah = float(fRAsex[0:2])
+	fram = float(fRAsex[2:4])
+	fras = float(fRAsex[4:])
+	return ((1/1 * frah) + (1/60 *fram) + (1/3600 *fras))* (360/24)
+    
+def DEsex_to_DEdec(fDEsex):
+	fded = float(fDEsex[0:3])
+	fdem = float(fDEsex[3:5])
+	fdes = float(fDEsex[5:])    
+	fDEdec = (math.fabs(fded)*3600.0+fdem*60.0+fdes)/3600.0
+	if fDEsex[0] == '-':
+		fDEdec = fDEdec * -1
+	return fDEdec
+    
+def Template_Selection(dnum, sep, stacknum, maxd):
+  dets = np.linspace(0,maxd,num=maxd+1, dtype=int)  # Array of detection indices
+  ineligible = [dnum]  # Initialise the 'ineligible' list - images with indices in this list are not considered for the template
+  for i in range(sep):  # Add the points nearby the SMOTE, defined by sep
+    if dnum+(i+1) <= maxd:
+      ineligible.append(dnum+(i+1))
+    if dnum-(i+1) >= 0:
+      ineligible.append(dnum-(i+1))
+
+  eligible = [x for x in dets if x < dnum and x not in ineligible]  # Of the remaining images, try to find stacknum worth of images before the SMOTE
+  temps = eligible[-stacknum:]
+
+  if len(eligible) < stacknum:  # If there aren't enough images before the SMOTE, try looking after the SMOTE
+    eligible = [x for x in dets if x > dnum and x not in ineligible]
+    temps = eligible[:stacknum]
+
+  if len(eligible) < stacknum:  # If there aren't enough images before or after the SMOTE, start collecting image before and after the SMOTE, in order of closeness.
+    temps = []                  # When the number of images collected is equal to stacknum, use those. Else, it will gather all available images, assuming stacknum couldn't be reached
+    for i in range(maxd):
+      if len(temps) == stacknum:
+        break
+      if dnum-(i+1) >= 0 and dnum-(i+1) not in ineligible and dnum-(i+1) not in temps:
+        temps.append(dnum-(i+1))
+      if len(temps) == stacknum:
+        break
+      if dnum+(i+1) <= maxd and dnum+(i+1) not in ineligible and dnum+(i+1) not in temps:
+        temps.append(dnum+(i+1))
+
+  return temps  # Produce a list of indices. Images with these indices should be used to make a stacked template.
 
 
 
@@ -116,6 +193,7 @@ field = '4hr'
 overwrite = False
 verbose = True
 datadir = '/fred/oz100/sgoode/SMOTEs/Data/'
+wd = datadir+'{}_{}_{}/'.format(yr, mo, field)
 
 ### Main Code ###
 ### Create/Load Dataframe ###
@@ -170,5 +248,20 @@ else:
 
 ### Process Candidates ###
 for i,r in data.iterrows():
-	Initialise_Dirs(datadir, r['Filename'])
+	### Initialise Directories ###
+	Initialise_Dirs(datadir, wd, r['Filename'])
+	
+	
+	### Prepare Candidate Information ###
+	day = r['Filename'].split('_')[1]
+	ordered_im_listpath  = '/fred/oz100/NOAO_archive/archive_NOAO_data/scripts/create_lc/image_mjd_lists/FINAL_'+str(yr)+'_'+mo+'_'+field+'_'+day+'.ascii'
+	ordered_ims = np.loadtxt(ordered_im_listpath, skiprows = 1, usecols=[0], dtype= str)
+	RA_test = RAsex_to_RAdec(r['Filename'][3:13])
+	DEC_test = DEsex_to_DEdec(r['Filename'][13:24])
+	path_cutout = '/fred/oz100/sgoode/SMOTEs/Data/{}_{}_{}/{}/cutouts/'.format(yr,mo,field,r['Filename'])
+	last_ccd = 1
+	found = False
+	max_det = len(ordered_ims)
+	det_num = r['Detection Index']
+	temps = Template_Selection(det_num, 3, 3, max_det)
 
