@@ -85,6 +85,28 @@ def Extract_Info(f):
 			
 	return index, mjd, mag, magerr, np.mean(nondet), np.std(nondet)/np.sqrt(len(nondet))
 
+def Initialise_Dirs(datapath, c_name):
+	if datapath[-1] != '/':
+		datapath = datapath+'/'
+		
+	if not os.path.exists(datapath):
+		print('{} does not exist. Please create before continuing!'.format(datapath))
+		return
+		
+	if not os.path.exists(datapath+c_name):
+		os.makedirs(datapath+c_name)
+		os.makedirs(datapath+c_name+'/full/')
+		os.makedirs(datapath+c_name+'/cutouts/')
+		os.makedirs(datapath+c_name+'/full/aligned/')
+		
+	elif not os.path.exists(datapath+c_name+'/full/'):
+		os.makedirs(datapath+c_name+'/full/')
+	elif not os.path.exists(datapath+c_name+'/cutouts/'):
+		os.makedirs(datapath+c_name+'/cutouts/')
+	elif not os.path.exists(datapath+c_name+'/full/aligned/'):
+		os.makedirs(datapath+c_name+'/full/aligned/')
+	return
+
 
 
 ### Arguments ###
@@ -92,11 +114,14 @@ yr = 2015
 mo = '01'
 field = '4hr'
 overwrite = False
+verbose = True
+datadir = '/fred/oz100/sgoode/SMOTEs/Data/'
 
 ### Main Code ###
-### Create Dataframe ###
+### Create/Load Dataframe ###
 if overwrite or not os.path.isfile('/fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}.csv'.format(yr, mo, field)):
-	print('Creating dataframe for {}_{}_{}'.format(yr, mo, field))
+	if verbose:
+		print('Creating dataframe for {}_{}_{}'.format(yr, mo, field))
 	wdir = '/fred/oz100/NOAO_archive/archive_NOAO_data/data_outputs/{}/{}/{}/g_band/single/lightcurves/files/'.format(yr, mo, field)
 	data = pd.DataFrame()
 	files,ids,mjds,mags,magerrs,mean_non,mean_nonerr = [], [], [], [], [], [], []
@@ -133,8 +158,17 @@ if overwrite or not os.path.isfile('/fred/oz100/sgoode/SMOTEs/Candidate_Datafram
 	data['Mean Nondetection Magnitude'] = mean_non
 	data['Mean Nondetection Magnitude Error'] = mean_nonerr
 	data.to_csv('/fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}.csv'.format(yr, mo, field))
+	if verbose:
+		print('Dataframe saved! (/fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}.csv)'.format(yr, mo, field))
 
 else:
 	data = pd.read_csv('/fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}.csv'.format(yr, mo, field))
+	if verbose:
+		print('Dataframe successfully loaded: /fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}.csv'.format(yr, mo, field))
 
-print(data)
+
+
+### Process Candidates ###
+for i,r in data.iterrows():
+	Initialise_Dirs(datadir, r['Filename'])
+
