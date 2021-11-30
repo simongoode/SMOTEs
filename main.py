@@ -45,7 +45,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import math
-
+from astropy.wcs import WCS
+from astropy.io import fits
 
 
 ### Function definitions ###
@@ -184,14 +185,26 @@ def Template_Selection(dnum, sep, stacknum, maxd):
 
   return temps  # Produce a list of indices. Images with these indices should be used to make a stacked template.
 
+def SMOTE_Selection(dnum, n, maxd):
+  dets = np.linspace(0,maxd,num=maxd+1, dtype=int)  # Array of detection indices
+  eligible = [dnum]  # Initialise the 'eligible' list - images with indices in this list are saved
+  for i in range(n):  # Add the points nearby the SMOTE, defined by n
+    if dnum+(i+1) <= maxd:
+      eligible.append(dnum+(i+1))
+    if dnum-(i+1) >= 0:
+      eligible.append(dnum-(i+1))
+  eligible.sort()
 
+  return eligible  # Produce a list of indices. Images with these indices should be saved.
+  
+  
 
 ### Arguments ###
 yr = 2015
 mo = '01'
 field = '4hr'
 overwrite = False
-verbose = True
+verbose = False
 datadir = '/fred/oz100/sgoode/SMOTEs/Data/'
 wd = datadir+'{}_{}_{}/'.format(yr, mo, field)
 
@@ -264,4 +277,57 @@ for i,r in data.iterrows():
 	max_det = len(ordered_ims)
 	det_num = r['Detection Index']
 	temps = Template_Selection(det_num, 3, 3, max_det)
+	nearby = SMOTE_Selection(det_num, 3, max_det)
+	t_file = open(wd+'{}/template_files.ascii'.format(r['Filename']), 'w+')
+	n_file = open(wd+'{}/nearby_files.ascii'.format(r['Filename']), 'w+')
+	if verbose:
+		print(r['Filename'])
+	for n,im in enumerate(ordered_ims):
+		if n not in temps and n not in nearby:
+			continue
+		im_path = '/fred/oz100/NOAO_archive/archive_NOAO_data/data_outputs/'+str(yr)+'/'+mo+'/'+ field+'/g_band/single/'+im[:26]+'/ccds/'
+		if verbose:
+			print('looking in last ccd ({})'.format(last_ccd))
+		for fitsim in os.listdir(im_path):
+			if fitsim.endswith('ext_{}.fits'.format(last_ccd)):
+				with fits.open(im_path+fitsim) as hdu:
+					w = WCS(hdu[0].header)
+					corners=w.calc_footprint()
+					corner_1 = corners[0]
+					corner_2 = corners[1]
+					corner_3 = corners[2]
 
+					if  corner_1[0] <= RA_test <=corner_2[0] and corner_1[1] >= DEC_test >= corner_3[1]:
+						if verbose:
+							print('found it')
+						if n in temps:
+							t_file.write(im_path+fitsim+'\n')
+						if n in nearby:
+							n_file.write(im_path+fitsim+'\n')
+						found = True
+						break
+		    
+		if found == False:
+			if verbose:		    
+				print('looking in other ccds')
+			for fitsim in os.listdir(im_path): 
+				with fits.open(im_path+fitsim) as hdu:
+					w = WCS(hdu[0].header)
+					corners=w.calc_footprint()
+					corner_1 = corners[0]
+					corner_2 = corners[1]
+					corner_3 = corners[2]
+
+					if  corner_1[0] <= RA_test <=corner_2[0] and corner_1[1] >= DEC_test >= corner_3[1]:
+						last_ccd = fitsim.split('ext_')[1].split('.')[0]
+						if verbose:
+							print('found in ccd {}'.format(last_ccd))
+						if n in temps:
+							t_file.write(im_path+fitsim+'\n')
+						if n in nearby:
+							n_file.write(im_path+fitsim+'\n')
+						break
+
+	t_file.close()
+	n_file.close()
+	break  # Break for testing
