@@ -47,6 +47,11 @@ import pandas as pd
 import math
 from astropy.wcs import WCS
 from astropy.io import fits
+from astropy.nddata.utils import Cutout2D
+from tensorflow import keras
+from keras.models import Sequential, Model
+from keras.layers import Activation, Dense, Dropout, Flatten, Input, Concatenate, Conv2D, MaxPooling2D, GlobalAveragePooling2D, AveragePooling2D
+import keras.backend as K
 
 
 ### Function definitions ###
@@ -197,16 +202,46 @@ def SMOTE_Selection(dnum, n, maxd):
 
   return eligible  # Produce a list of indices. Images with these indices should be saved.
   
-  
+### MODEL METRIC FUNCTIONS ###
+def MCC(y_true, y_pred):
+    y_pred_pos = K.round(K.clip(y_pred, 0, 1))
+    y_pred_neg = 1 - y_pred_pos
+
+    y_pos = K.round(K.clip(y_true, 0, 1))
+    y_neg = 1 - y_pos
+
+    tp = K.sum(y_pos * y_pred_pos)
+    tn = K.sum(y_neg * y_pred_neg)
+
+    fp = K.sum(y_neg * y_pred_pos)
+    fn = K.sum(y_pos * y_pred_neg)
+
+    numerator = (tp * tn - fp * fn)
+    denominator = K.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+
+    return numerator / (denominator + K.epsilon())
+    
+    
+def f1_score(y_true, y_pred): #taken from old keras source code
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    recall = true_positives / (possible_positives + K.epsilon())
+    f1_val = 2*(precision*recall)/(precision+recall+K.epsilon())
+    return f1_val
+
+
 
 ### Arguments ###
 yr = 2015
 mo = '01'
 field = '4hr'
 overwrite = False
-verbose = False
+verbose = True
 datadir = '/fred/oz100/sgoode/SMOTEs/Data/'
 wd = datadir+'{}_{}_{}/'.format(yr, mo, field)
+size = 31
 
 ### Main Code ###
 ### Create/Load Dataframe ###
@@ -258,9 +293,20 @@ else:
 		print('Dataframe successfully loaded: /fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}.csv'.format(yr, mo, field))
 
 
+### Load ROBOT ###
+mdl_name = 'exp_35_remade.h5'
+print('>>> ROBOT Launching. Loading Model {}...'.format(mdl_name))
+print("Keras version {}\n".format(keras.__version__))
+model_to_load = "/fred/oz100/pipes/DWF_PIPE/ROBOT_pipe/CONFIG/{}".format(mdl_name)
+model = keras.models.load_model(model_to_load, custom_objects={'f1_score':f1_score, 'MCC':MCC})
+model.load_weights("/fred/oz100/pipes/DWF_PIPE/ROBOT_pipe/CONFIG/exp_35_remade_weights.h5")
+model.summary()
+print(">>> Startup Complete!")
+
 
 ### Process Candidates ###
 for i,r in data.iterrows():
+
 	### Initialise Directories ###
 	Initialise_Dirs(datadir, wd, r['Filename'])
 	
@@ -276,7 +322,7 @@ for i,r in data.iterrows():
 	found = False
 	max_det = len(ordered_ims)
 	det_num = r['Detection Index']
-	temps = Template_Selection(det_num, 3, 3, max_det)
+	temps = Template_Selection(det_num, 1, 3, max_det)
 	nearby = SMOTE_Selection(det_num, 3, max_det)
 	t_file = open(wd+'{}/template_files.ascii'.format(r['Filename']), 'w+')
 	n_file = open(wd+'{}/nearby_files.ascii'.format(r['Filename']), 'w+')
@@ -310,6 +356,8 @@ for i,r in data.iterrows():
 							smote = im_path+fitsim
 						found = True
 						break
+					else:
+						found = False
 		    
 		if found == False:
 			if verbose:		    
@@ -334,11 +382,57 @@ for i,r in data.iterrows():
 							s_file.write(im_path+fitsim+'\n')
 							smote = im_path+fitsim
 						break
+		print(corner_1[0], RA_test, corner_2[0], corner_1[1], DEC_test, corner_3[1])
 
 	t_file.close()
 	n_file.close()
 	s_file.close()
 	
-	os.system('swarp @{}/template_files.ascii -VERBOSE_TYPE QUIET -IMAGEOUT_NAME {}/full/template.fits -WEIGHTOUT_NAME {}/full/temp_weights.fits -XML_NAME {}/full/swarp.xml'.format(wd+r['Filename'], wd+r['Filename'], wd+r['Filename'], wd+r['Filename']))
-	os.system('python /fred/oz100/sgoode/dataexplore/datavis/fits/align_image.py --swarp /apps/skylake/software/compiler/gcc/6.4.0/swarp/2.38.0/bin/swarp {}/full/template.fits {} -o {}/full/aligned/ -q'.format(wd+r['Filename'], smote, wd+r['Filename']))
-	break  # Break for testing
+	if os.stat(wd+'{}/template_files.ascii'.format(r['Filename'])).st_size == 0:
+		if verbose:
+			print('Template Error: {} - no template exists!'.format(r['Filename']))
+		r['ROBOT'] = 'N/A'
+		continue
+	else:  # Create template, align images and create subtractions
+		os.system('swarp @{}/template_files.ascii -VERBOSE_TYPE QUIET -IMAGEOUT_NAME {}/full/template.fits -WEIGHTOUT_NAME {}/full/temp_weights.fits -XML_NAME {}/full/swarp.xml'.format(wd+r['Filename'], wd+r['Filename'], wd+r['Filename'], wd+r['Filename']))
+		os.system('python /fred/oz100/sgoode/dataexplore/datavis/fits/align_image.py --swarp /apps/skylake/software/compiler/gcc/6.4.0/swarp/2.38.0/bin/swarp {}/full/template.fits {} -o {}/full/aligned/ -q'.format(wd+r['Filename'], smote, wd+r['Filename']))
+		os.system('python /fred/oz100/sgoode/dataexplore/datavis/fits/subtract_image.py -s {}/full/aligned/subtraction.fits -o --sextractor /apps/skylake/software/mpi/gcc/6.4.0/openmpi/3.0.0/sextractor/2.19.5/bin/sex {}/full/aligned/template.resamp.fits {}/full/aligned/*ext*resamp.fits'.format(wd+r['Filename'], wd+r['Filename'], wd+r['Filename']))
+	
+	### Make cutouts ###
+	for fitsim in os.listdir(wd+'{}/full/aligned/'.format(r['Filename'])):
+		with fits.open(wd+'{}/full/aligned/'.format(r['Filename'])+fitsim) as hdu:
+			w = WCS(hdu[0].header)
+			head = hdu[0].header
+			xlim=head['NAXIS1']
+			ylim=head['NAXIS2']
+
+			pixcrd_im = np.array([[xlim, ylim]], np.float_)
+			world_im = w.wcs_pix2world(pixcrd_im, 1)
+			pixx_im, pixy_im = world_im[0][0], world_im[0][1]				
+				
+			corners=w.calc_footprint()
+			corner_1 = corners[0]
+			corner_2 = corners[1]
+			corner_3 = corners[2]
+			corner_4 = corners[3] 
+			differnce = corner_1 - corner_2 
+
+			pixcrd = np.array([[RA_test, DEC_test]], np.float_)
+			worldpix = w.wcs_world2pix(pixcrd, 1)
+			pixx, pixy = worldpix[0][0], worldpix[0][1]
+			
+			print(corner_1[0], RA_test, corner_2[0], corner_1[1], DEC_test, corner_3[1])
+
+			if  corner_1[0] <= RA_test <=corner_2[0] and corner_1[1] >= DEC_test >= corner_3[1]:
+				cutout = Cutout2D(hdu[0].data, (pixx, pixy), size, wcs= w)
+				print(cutout)
+				#plt.axis('off')
+				#plt.imshow(hdu[0].data, cmap='gray')
+				#plt.colorbar()
+				#plt.savefig(path_cutout+'cutout_'+fitsim+'.png')
+				plt.close()
+			else:
+				print("It ain't here")
+	
+	if int(i) >= 9:
+		break  # Break for testing
