@@ -45,6 +45,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import math
+import astropy
 from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.nddata.utils import Cutout2D
@@ -52,7 +53,8 @@ from tensorflow import keras
 from keras.models import Sequential, Model
 from keras.layers import Activation, Dense, Dropout, Flatten, Input, Concatenate, Conv2D, MaxPooling2D, GlobalAveragePooling2D, AveragePooling2D
 import keras.backend as K
-
+import time
+t_start = time.perf_counter()
 
 ### Function definitions ###
 def Save_LC(f):
@@ -202,6 +204,19 @@ def SMOTE_Selection(dnum, n, maxd):
 
   return eligible  # Produce a list of indices. Images with these indices should be saved.
   
+def PlotTriplet(a, figname='Triplet', loc=None):
+	fig, (ax1, ax2, ax3) = plt.subplots(1,3)
+	fig.suptitle(figname)
+	ax1.set_title('Template')
+	ax1.imshow(a[0,:,:,2]*25.762, cmap='gray')
+	ax2.set_title('Science')
+	ax2.imshow(a[0,:,:,0], cmap='gray')
+	ax3.set_title('Subtraction')
+	ax3.imshow(a[0,:,:,1]*7.685, cmap='gray')
+	if loc != None:
+		plt.savefig(loc)
+    
+    
 ### MODEL METRIC FUNCTIONS ###
 def MCC(y_true, y_pred):
     y_pred_pos = K.round(K.clip(y_pred, 0, 1))
@@ -238,7 +253,7 @@ yr = 2015
 mo = '01'
 field = '4hr'
 overwrite = False
-verbose = True
+verbose = False
 datadir = '/fred/oz100/sgoode/SMOTEs/Data/'
 wd = datadir+'{}_{}_{}/'.format(yr, mo, field)
 size = 31
@@ -305,6 +320,8 @@ print(">>> Startup Complete!")
 
 
 ### Process Candidates ###
+RB_scores = []
+notes = []
 for i,r in data.iterrows():
 
 	### Initialise Directories ###
@@ -322,7 +339,7 @@ for i,r in data.iterrows():
 	found = False
 	max_det = len(ordered_ims)
 	det_num = r['Detection Index']
-	temps = Template_Selection(det_num, 1, 3, max_det)
+	temps = Template_Selection(det_num, 3, 3, max_det)
 	nearby = SMOTE_Selection(det_num, 3, max_det)
 	t_file = open(wd+'{}/template_files.ascii'.format(r['Filename']), 'w+')
 	n_file = open(wd+'{}/nearby_files.ascii'.format(r['Filename']), 'w+')
@@ -382,7 +399,7 @@ for i,r in data.iterrows():
 							s_file.write(im_path+fitsim+'\n')
 							smote = im_path+fitsim
 						break
-		print(corner_1[0], RA_test, corner_2[0], corner_1[1], DEC_test, corner_3[1])
+		#print(corner_1[0], RA_test, corner_2[0], corner_1[1], DEC_test, corner_3[1])
 
 	t_file.close()
 	n_file.close()
@@ -391,7 +408,8 @@ for i,r in data.iterrows():
 	if os.stat(wd+'{}/template_files.ascii'.format(r['Filename'])).st_size == 0:
 		if verbose:
 			print('Template Error: {} - no template exists!'.format(r['Filename']))
-		r['ROBOT'] = 'N/A'
+		RB_scores.append('N/A')
+		notes.append('No files in template_files.ascii')
 		continue
 	else:  # Create template, align images and create subtractions
 		os.system('swarp @{}/template_files.ascii -VERBOSE_TYPE QUIET -IMAGEOUT_NAME {}/full/template.fits -WEIGHTOUT_NAME {}/full/temp_weights.fits -XML_NAME {}/full/swarp.xml'.format(wd+r['Filename'], wd+r['Filename'], wd+r['Filename'], wd+r['Filename']))
@@ -399,6 +417,7 @@ for i,r in data.iterrows():
 		os.system('python /fred/oz100/sgoode/dataexplore/datavis/fits/subtract_image.py -s {}/full/aligned/subtraction.fits -o --sextractor /apps/skylake/software/mpi/gcc/6.4.0/openmpi/3.0.0/sextractor/2.19.5/bin/sex {}/full/aligned/template.resamp.fits {}/full/aligned/*ext*resamp.fits'.format(wd+r['Filename'], wd+r['Filename'], wd+r['Filename']))
 	
 	### Make cutouts ###
+	arr = np.empty((1,31,31,3))
 	for fitsim in os.listdir(wd+'{}/full/aligned/'.format(r['Filename'])):
 		with fits.open(wd+'{}/full/aligned/'.format(r['Filename'])+fitsim) as hdu:
 			w = WCS(hdu[0].header)
@@ -421,18 +440,42 @@ for i,r in data.iterrows():
 			worldpix = w.wcs_world2pix(pixcrd, 1)
 			pixx, pixy = worldpix[0][0], worldpix[0][1]
 			
-			print(corner_1[0], RA_test, corner_2[0], corner_1[1], DEC_test, corner_3[1])
+			#print(corner_1[0], RA_test, corner_2[0], corner_1[1], DEC_test, corner_3[1])
 
-			if  corner_1[0] <= RA_test <=corner_2[0] and corner_1[1] >= DEC_test >= corner_3[1]:
+			#if  corner_1[0] <= RA_test <=corner_2[0] and corner_1[1] >= DEC_test >= corner_3[1]:
+			try:
 				cutout = Cutout2D(hdu[0].data, (pixx, pixy), size, wcs= w)
-				print(cutout)
+				if fitsim.endswith('template.resamp.fits'):
+					arr[:,:,:,2] = cutout.data/25.762
+				elif fitsim.endswith('subtraction.fits'):
+					arr[:,:,:,1] = cutout.data/7.685
+				elif fitsim.endswith('resamp.fits'):
+					arr[:,:,:,0] = cutout.data/25.759
+				
 				#plt.axis('off')
 				#plt.imshow(hdu[0].data, cmap='gray')
+				#plt.imshow(cutout.data, cmap='gray')
 				#plt.colorbar()
+				#plt.show()
 				#plt.savefig(path_cutout+'cutout_'+fitsim+'.png')
-				plt.close()
-			else:
-				print("It ain't here")
+				#plt.close()
+			
+			except astropy.nddata.utils.NoOverlapError:
+				RB_scores.append('N/A')
+				notes.append('SMOTE outside of aligned image')
+				hdu.close()
+				break
+		hdu.close()
 	
-	if int(i) >= 9:
-		break  # Break for testing
+	pred = model.predict(arr)[0][0]
+	PlotTriplet(arr, figname=r['Filename'], loc='{}/{}/triplet.png'.format(wd, r['Filename']))
+	plt.show()
+	RB_scores.append(pred)
+	notes.append('-')
+	
+
+data['RB Score'] = RB_scores
+data['Notes'] = notes
+data.to_csv('/fred/oz100/sgoode/SMOTEs/Candidate_Dataframes/{}_{}_{}_ROBOT.csv'.format(yr, mo, field))
+t_stop = time.perf_counter()
+print('Script finished in {} seconds.'.format(t_stop-t_start))
