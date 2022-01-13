@@ -1,13 +1,22 @@
 #!/usr/bin/python
 
 #!/usr/bin/env python
-""" isolate_SMOTE_detection.py -- A script for finding the detection index of a SMOTE. This script assumes that the SMOTE is the brightest detection in a light curve.
+""" id_to_filepath.py -- A script for finding a detection fits file with a detection index. 
 
-Usage: isolate_SMOTE_detection.py [-h] [-v] [-q] [--debug] <file>
+Usage: id_to_filepath.py [-h] [-v] [-q] [--debug] <file> <id> <listpath> <impath>
 
 Arguments:
     file (string)
     	Path to a light curve file (fmt: MJD, g_mag, g_mag_err, upper_lim_mag (space-separated))
+    
+    id (int)
+    	Index of SMOTE in the light curve file
+	
+    listpath (string)
+    	Path to an ordered image list
+
+    impath (string)
+	Path to ccds for the appropriate field / date of observations
 	
 Options:
     -h, --help                              Show this screen
@@ -16,7 +25,7 @@ Options:
     --debug                                 Output more for debugging [default: False]
 
 Examples:
-    bash: isolate_SMOTE_detection.py /fred/oz100/NOAO_archive/archive_NOAO_data/data_outputs/2015/01/4hr/g_band/single/lightcurves/files/DWF040748.225-545713.829_150116
+    bash: id_to_filepath.py /fred/oz100/NOAO_archive/archive_NOAO_data/data_outputs/2015/01/4hr/g_band/single/lightcurves/files/DWF040748.225-545713.829_150116 61 /fred/oz100/NOAO_archive/archive_NOAO_data/scripts/create_lc/image_mjd_lists/FINAL_2015_01_4hr_150116.ascii /fred/oz100/NOAO_archive/archive_NOAO_data/data_outputs/2015/01/4hr/g_band/single/
 """
 
 
@@ -25,11 +34,14 @@ import docopt
 import os, sys
 import pandas as pd
 import numpy as np
+import math
+from astropy.io import fits
+from astropy.wcs import WCS
 
 __author__	= "Simon Goode"
 __license__	= "MIT"
-__version__	= "1.0"
-__date__	= "2022-01-07"
+__version__	= "0.1"
+__date__	= "2022-01-11"
 __maintainer__	= "Simon Goode"
 __email__	= "sgoode@swin.edu.au"
 
@@ -65,22 +77,53 @@ def clearit(fname):
 # ====== Supplementary Functions ====== #
 #########################################
 '''These functions are used within the Main function'''
+def RAsex_to_RAdec(fRAsex):
+	frah = float(fRAsex[0:2])
+	fram = float(fRAsex[2:4])
+	fras = float(fRAsex[4:])
+	return ((1/1 * frah) + (1/60 *fram) + (1/3600 *fras))* (360/24)
+    
+def DEsex_to_DEdec(fDEsex):
+	fded = float(fDEsex[0:3])
+	fdem = float(fDEsex[3:5])
+	fdes = float(fDEsex[5:])    
+	fDEdec = (math.fabs(fded)*3600.0+fdem*60.0+fdes)/3600.0
+	if fDEsex[0] == '-':
+		fDEdec = fDEdec * -1
+	return fDEdec
 
-	
+def SearchCCDs(impath, ordered_ims, det_id, RA, DEC):
+	for n, im in enumerate(ordered_ims):
+		if n != det_id:
+			continue
+		im_path = f'{impath}{im[:26]}/ccds/'
+		for fitsim in os.listdir(im_path):
+			with fits.open(im_path+fitsim) as hdu:
+				w = WCS(hdu[0].header)
+				corners=w.calc_footprint()
+				corner_1 = corners[0]
+				corner_2 = corners[1]
+				corner_3 = corners[2]
+
+				if  corner_1[0] <= RA <=corner_2[0] and corner_1[1] >= DEC >= corner_3[1]:
+					return im_path+fitsim
+
 #########################################
 # =========== Main Function =========== #
 #########################################
 
-def isolate_SMOTE_detection(filepath):
+def id_to_filepath(filepath, det_id, listpath, impath):
 	fname = filepath.split('/')[-1]
-	print_debug_string(f'Isolating SMOTE detection of {fname}', debugmode=debugmode)
+	print_debug_string(f'Selecting templates for {fname}', debugmode=debugmode)
 	lc = pd.read_csv(filepath, delimiter=' ', header=0, error_bad_lines=False)
-	smote_id = lc.g_mag.idxmax()  # Assumes the brightest detection is the SMOTE
-	row = lc.iloc[smote_id]
-	print_verbose_string(f'SMOTE Info:\n{row}', verbose=verbose)
-	print_debug_string(f'Returning ID of {smote_id}', debugmode=debugmode)
-	return smote_id
-		
+	
+	day = fname.split('_')[1]
+	ordered_ims = np.loadtxt(listpath, skiprows = 1, usecols=[0], dtype= str)
+	RA = RAsex_to_RAdec(fname[3:13])
+	DEC = DEsex_to_DEdec(fname[13:24])
+	fitspath = SearchCCDs(impath, ordered_ims, det_id, RA, DEC)
+	return fitspath
+	
 ############################################################################
 ####################### BODY OF PROGRAM STARTS HERE ########################
 ############################################################################
@@ -94,8 +137,11 @@ if __name__ == "__main__":
     debugmode       = arguments['--debug']
     
     filepath        = arguments['<file>']
+    det_id          = arguments['<id>']
+    listpath        = arguments['<listpath>']
+    impath          = arguments['<impath>']
 
     if debugmode:
         print(arguments)  
 
-    _ = isolate_SMOTE_detection(filepath)
+    _ = id_to_filepath(filepath, int(det_id), listpath, impath)
