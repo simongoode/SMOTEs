@@ -25,6 +25,7 @@ import docopt
 import os, sys
 import pandas as pd
 import numpy as np
+import pickle as p
 
 __author__	= "Simon Goode"
 __license__	= "MIT"
@@ -65,7 +66,7 @@ def clearit(fname):
 # ====== Supplementary Functions ====== #
 #########################################
 '''These functions are used within the Main function'''
-def OutOfNowhereCriteria(mags):
+def OutOfNowhereCriteria(mags, verbose=False, debugmode=False):
 	print_debug_string('Executing OutOfNowhereCriteria', debugmode=debugmode)
 	p = False  # True/False flag for passing/failing the criteria
 	_ = [i for i in mags if i != 0.]
@@ -84,14 +85,16 @@ def OutOfNowhereCriteria(mags):
 # =========== Main Function =========== #
 #########################################
 
-def selection_criteria(filepath):
+def selection_criteria(filepath, verbose=False, debugmode=False):
 	lc = pd.read_csv(filepath, delimiter=' ', header=0, error_bad_lines=False)
 	fname = filepath.split('/')[-1]
 	print_verbose_string(f'Analysing light curve: {fname}', verbose=verbose)
 	
-	p = OutOfNowhereCriteria(lc['g_mag'].tolist())
+	p = OutOfNowhereCriteria(lc['g_mag'].tolist(), verbose=verbose, debugmode=debugmode)
 	if p:
 		return 'Out of Nowhere Candidate'
+	else:
+		return False
 		
 ############################################################################
 ####################### BODY OF PROGRAM STARTS HERE ########################
@@ -110,4 +113,6 @@ if __name__ == "__main__":
     if debugmode:
         print(arguments)  
 
-    _ = selection_criteria(filepath)
+    _ = selection_criteria(filepath, verbose=verbose, debugmode=debugmode)
+    with open('out.p', 'wb') as f:
+        p.dump(_, f)

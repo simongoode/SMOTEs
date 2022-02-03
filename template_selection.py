@@ -11,6 +11,7 @@ Arguments:
     
     id (int)
     	Index of SMOTE in the light curve file
+	
 Options:
     -h, --help                              Show this screen
     -v, --verbose                           Show extra information [default: False]   
@@ -29,6 +30,7 @@ import docopt
 import os, sys
 import pandas as pd
 import numpy as np
+import pickle as p
 
 __author__	= "Simon Goode"
 __license__	= "MIT"
@@ -66,16 +68,10 @@ def clearit(fname):
     return None
 
 #########################################
-# ====== Supplementary Functions ====== #
-#########################################
-'''These functions are used within the Main function'''
-
-	
-#########################################
 # =========== Main Function =========== #
 #########################################
 
-def template_selection(filepath, dnum, sep, stacknum):
+def template_selection(filepath, dnum, sep=3, stacknum=3, verbose=False, debugmode=False):
 	fname = filepath.split('/')[-1]
 	print_debug_string(f'Selecting templates for {fname}', debugmode=debugmode)
 	lc = pd.read_csv(filepath, delimiter=' ', header=0, error_bad_lines=False)
@@ -134,4 +130,6 @@ if __name__ == "__main__":
     if debugmode:
         print(arguments)  
 
-    _ = template_selection(filepath, int(smote_id), int(sep), int(stacknum))
+    _ = template_selection(filepath, int(smote_id), int(sep), int(stacknum), verbose=False, debugmode=False)
+    with open('out.p', 'wb') as f:
+        p.dump(_, f)

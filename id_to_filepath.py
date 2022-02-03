@@ -35,6 +35,7 @@ import os, sys
 import pandas as pd
 import numpy as np
 import math
+import pickle as p
 from astropy.io import fits
 from astropy.wcs import WCS
 
@@ -112,7 +113,7 @@ def SearchCCDs(impath, ordered_ims, det_id, RA, DEC):
 # =========== Main Function =========== #
 #########################################
 
-def id_to_filepath(filepath, det_id, listpath, impath):
+def id_to_filepath(filepath, det_id, listpath, impath, verbose=False, debugmode=False):
 	fname = filepath.split('/')[-1]
 	print_debug_string(f'Selecting templates for {fname}', debugmode=debugmode)
 	lc = pd.read_csv(filepath, delimiter=' ', header=0, error_bad_lines=False)
@@ -145,3 +146,5 @@ if __name__ == "__main__":
         print(arguments)  
 
     _ = id_to_filepath(filepath, int(det_id), listpath, impath)
+    with open('out.p', 'wb') as f:
+        p.dump(_, f)

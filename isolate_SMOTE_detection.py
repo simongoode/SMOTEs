@@ -71,7 +71,7 @@ def clearit(fname):
 # =========== Main Function =========== #
 #########################################
 
-def isolate_SMOTE_detection(filepath):
+def isolate_SMOTE_detection(filepath, verbose=False, debugmode=False):
 	fname = filepath.split('/')[-1]
 	print_debug_string(f'Isolating SMOTE detection of {fname}', debugmode=debugmode)
 	lc = pd.read_csv(filepath, delimiter=' ', header=0, error_bad_lines=False)
@@ -99,3 +99,4 @@ if __name__ == "__main__":
         print(arguments)  
 
     _ = isolate_SMOTE_detection(filepath)
+    print(_)
