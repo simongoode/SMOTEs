@@ -35,7 +35,6 @@ import os, sys
 import pandas as pd
 import numpy as np
 import math
-import pickle as p
 from astropy.io import fits
 from astropy.wcs import WCS
 
@@ -146,5 +145,3 @@ if __name__ == "__main__":
         print(arguments)  
 
     _ = id_to_filepath(filepath, int(det_id), listpath, impath)
-    with open('out.p', 'wb') as f:
-        p.dump(_, f)

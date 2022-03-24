@@ -26,6 +26,9 @@ import os, sys
 import pandas as pd
 import numpy as np
 import pickle as p
+import matplotlib.pyplot as plt
+from isolate_SMOTE_detection import isolate_SMOTE_detection
+
 
 __author__	= "Simon Goode"
 __license__	= "MIT"
@@ -81,6 +84,47 @@ def OutOfNowhereCriteria(mags, verbose=False, debugmode=False):
 		p = True
 	return p
 	
+def QuiescentCounterpartCriteria(mags, ndmags, verbose=False, debugmode=False):
+	print_debug_string('Executing QuiescentCounterpartCriteria', debugmode=debugmode)
+	p = False  # True/False flag for passing/failing the criteria
+	smote_x = None
+	lc = np.empty(len(mags))
+	for i,m in enumerate(mags):
+		if m == 0.:
+			lc[i] = ndmags[i]
+		else:
+			lc[i] = mags[i]
+	
+	bsize = 3
+	threshold = .5  # How many standard devs is regarded as outliers?
+	samples = [lc[i:i+bsize] for i in range(len(lc)-(bsize-1))]
+	stdevs = [np.std(lc[i:i+bsize]) for i in range(len(lc)-(bsize-1))]
+	flags = []
+	for s in stdevs:
+		if s > threshold:
+			flags.append(True)
+		else:
+			flags.append(False)
+			
+	smoteids = [i for i in range(len(lc)-(bsize-1)) if flags[i :i+bsize] == [True,True,True]]
+	
+	if len(smoteids) == 1:
+		print_verbose_string('SUCCESS - Quiescent counterpart criteria', verbose=verbose)
+		p = True
+		
+		smote_x = smoteids[0]+2
+		plt.scatter(smote_x, lc[smote_x], marker='*',color='tab:red', zorder=1, s=80)
+		plt.plot(range(len(lc)),lc,marker='o',markersize=5,color='black',linestyle='None', zorder=0)
+		plt.show()
+	
+		plt.scatter(range(len(stdevs)), stdevs)
+		plt.plot([0,len(stdevs)], [threshold, threshold], color='tab:red')
+		plt.show()
+	
+	return p, smote_x
+	
+	
+	
 #########################################
 # =========== Main Function =========== #
 #########################################
@@ -92,9 +136,14 @@ def selection_criteria(filepath, verbose=False, debugmode=False):
 	
 	p = OutOfNowhereCriteria(lc['g_mag'].tolist(), verbose=verbose, debugmode=debugmode)
 	if p:
-		return 'Out of Nowhere Candidate'
+		ID = isolate_SMOTE_detection(filepath, verbose=verbose, debugmode=debugmode)
+		return 'Out of Nowhere Candidate', ID
+		
+	p, ID = QuiescentCounterpartCriteria(lc['g_mag'].tolist(), lc['upper_lim_mag'].tolist(), verbose=verbose, debugmode=debugmode)
+	if p:
+		return 'Quiescent Counterpart Candidate', ID
 	else:
-		return False
+		return False, None
 		
 ############################################################################
 ####################### BODY OF PROGRAM STARTS HERE ########################
@@ -114,5 +163,3 @@ if __name__ == "__main__":
         print(arguments)  
 
     _ = selection_criteria(filepath, verbose=verbose, debugmode=debugmode)
-    with open('out.p', 'wb') as f:
-        p.dump(_, f)

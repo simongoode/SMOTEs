@@ -29,7 +29,7 @@ import numpy as np
 __author__	= "Simon Goode"
 __license__	= "MIT"
 __version__	= "1.0"
-__date__	= "2022-01-07"
+__date__	= "2022-02-10"
 __maintainer__	= "Simon Goode"
 __email__	= "sgoode@swin.edu.au"
 
@@ -99,4 +99,3 @@ if __name__ == "__main__":
         print(arguments)  
 
     _ = isolate_SMOTE_detection(filepath)
-    print(_)
