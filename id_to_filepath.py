@@ -92,11 +92,12 @@ def DEsex_to_DEdec(fDEsex):
 		fDEdec = fDEdec * -1
 	return fDEdec
 
-def SearchCCDs(impath, ordered_ims, det_id, RA, DEC):
+def SearchCCDs(impath, ordered_ims, det_id, RA, DEC, verbose=False, debugmode=False):
 	for n, im in enumerate(ordered_ims):
 		if n != det_id:
 			continue
 		im_path = f'{impath}{im[:26]}/ccds/'
+		print_debug_string(f'Looking for detection id: {det_id} across all CCDs...', debugmode=debugmode)
 		for fitsim in os.listdir(im_path):
 			with fits.open(im_path+fitsim) as hdu:
 				w = WCS(hdu[0].header)
@@ -106,6 +107,7 @@ def SearchCCDs(impath, ordered_ims, det_id, RA, DEC):
 				corner_3 = corners[2]
 
 				if  corner_1[0] <= RA <=corner_2[0] and corner_1[1] >= DEC >= corner_3[1]:
+					print_debug_string(f'Found the source in {im_path}{fitsim}', debugmode=debugmode)
 					return im_path+fitsim
 
 #########################################
@@ -121,7 +123,7 @@ def id_to_filepath(filepath, det_id, listpath, impath, verbose=False, debugmode=
 	ordered_ims = np.loadtxt(listpath, skiprows = 1, usecols=[0], dtype= str)
 	RA = RAsex_to_RAdec(fname[3:13])
 	DEC = DEsex_to_DEdec(fname[13:24])
-	fitspath = SearchCCDs(impath, ordered_ims, det_id, RA, DEC)
+	fitspath = SearchCCDs(impath, ordered_ims, det_id, RA, DEC, verbose=verbose, debugmode=debugmode)
 	return fitspath
 	
 ############################################################################

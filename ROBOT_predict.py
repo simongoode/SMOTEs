@@ -110,41 +110,44 @@ def ROBOT_predict(model, template, science, subtraction, ra, dec, verbose=False,
 	for i,f in enumerate([science, subtraction, template]):
 		if f.endswith('.fits'):
 			# Do FITS analysis
-			with fits.open(f) as hdu:
-				w = WCS(hdu[0].header)
-				head = hdu[0].header
-				xlim=head['NAXIS1']
-				ylim=head['NAXIS2']
+			try:
+				with fits.open(f) as hdu:
+					w = WCS(hdu[0].header)
+					head = hdu[0].header
+					xlim=head['NAXIS1']
+					ylim=head['NAXIS2']
 
-				pixcrd_im = np.array([[xlim, ylim]], np.float_)
-				world_im = w.wcs_pix2world(pixcrd_im, 1)
-				pixx_im, pixy_im = world_im[0][0], world_im[0][1]				
+					pixcrd_im = np.array([[xlim, ylim]], np.float_)
+					world_im = w.wcs_pix2world(pixcrd_im, 1)
+					pixx_im, pixy_im = world_im[0][0], world_im[0][1]				
 				
-				corners=w.calc_footprint()
-				corner_1 = corners[0]
-				corner_2 = corners[1]
-				corner_3 = corners[2]
-				corner_4 = corners[3] 
-				differnce = corner_1 - corner_2 
+					corners=w.calc_footprint()
+					corner_1 = corners[0]
+					corner_2 = corners[1]
+					corner_3 = corners[2]
+					corner_4 = corners[3] 
+					differnce = corner_1 - corner_2 
 
-				pixcrd = np.array([[ra, dec]], np.float_)
-				worldpix = w.wcs_world2pix(pixcrd, 1)
-				pixx, pixy = worldpix[0][0], worldpix[0][1]
+					pixcrd = np.array([[ra, dec]], np.float_)
+					worldpix = w.wcs_world2pix(pixcrd, 1)
+					pixx, pixy = worldpix[0][0], worldpix[0][1]
 			
-				try:
-					cutout = Cutout2D(hdu[0].data, (pixx, pixy), 31, wcs= w)
-					if i==2 or i==0:
-						edge_flag = EdgeCheck(cutout.data)
-						if edge_flag:
-							return 0.
+					try:
+						cutout = Cutout2D(hdu[0].data, (pixx, pixy), 31, wcs= w)
+						if i==2 or i==0:
+							edge_flag = EdgeCheck(cutout.data)
+							if edge_flag:
+								return 0.
 							
-					arr[:,:,:,i] = cutout.data/norm_vals[i]
+						arr[:,:,:,i] = cutout.data/norm_vals[i]
 			
-				except astropy.nddata.utils.NoOverlapError:
-					hdu.close()
-					return 0.
-			hdu.close()
-		
+					except astropy.nddata.utils.NoOverlapError:
+						hdu.close()
+						return 0.
+				hdu.close()
+			except OSError:
+				print_verbose_string(f'OSError caught: Empty or Corrupt FITS file. Returning NaN.', verbose=verbose)
+				return np.nan
 		else:
 			return 'Filetype not recognised {f}'
 			

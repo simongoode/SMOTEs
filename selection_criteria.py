@@ -113,13 +113,13 @@ def QuiescentCounterpartCriteria(mags, ndmags, verbose=False, debugmode=False):
 		p = True
 		
 		smote_x = smoteids[0]+2
-		plt.scatter(smote_x, lc[smote_x], marker='*',color='tab:red', zorder=1, s=80)
-		plt.plot(range(len(lc)),lc,marker='o',markersize=5,color='black',linestyle='None', zorder=0)
-		plt.show()
+		#plt.scatter(smote_x, lc[smote_x], marker='*',color='tab:red', zorder=1, s=80)
+		#plt.plot(range(len(lc)),lc,marker='o',markersize=5,color='black',linestyle='None', zorder=0)
+		#plt.show()
 	
-		plt.scatter(range(len(stdevs)), stdevs)
-		plt.plot([0,len(stdevs)], [threshold, threshold], color='tab:red')
-		plt.show()
+		#plt.scatter(range(len(stdevs)), stdevs)
+		#plt.plot([0,len(stdevs)], [threshold, threshold], color='tab:red')
+		#plt.show()
 	
 	return p, smote_x
 	
