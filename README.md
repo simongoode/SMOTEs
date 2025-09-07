@@ -20,6 +20,8 @@ The pipeline follows a multi-stage process to identify genuine transient candida
 4. Manual Inspection & Vetting: The final candidates are manually inspected to identify the most promising ones and to perform further analysis, including multi-wavelength counterpart searches and rejection of satellite debris glints.
 
 ## License
-This project is licensed under the MIT License. See the LICENSE file for more details.
+This project is licensed under the MIT License.
+
 ## Acknowledgments
 This research was conducted as part of the Deeper, Wider, Faster (DWF) programme and was funded by the Australian Research Council Centre of Excellence for Gravitational Wave Discovery (OzGrav). We also acknowledge the use of data from the Dark Energy Camera (DECam).
+
